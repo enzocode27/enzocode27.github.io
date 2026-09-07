@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Flydeck</title>
+<meta name="description" content="Flydeck: i tuoi viaggi in un mazzo di carte. Assistenza e documenti.">
+<style>
+  :root{
+    --bg:#EFEAE3; --surface:#FAF6F0; --accent:#C0562F; --accent-soft:#E8D5C7;
+    --text:#1F1B18; --muted:#5F574F;
+    --serif:'Times New Roman',Georgia,serif;
+    --sans:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;
+  }
+  *,*::before,*::after{box-sizing:border-box}
+  body{
+    margin:0;padding:0;background:var(--bg);color:var(--text);
+    font-family:var(--sans);font-size:16px;line-height:1.62;
+    -webkit-font-smoothing:antialiased;
+    display:flex;align-items:center;justify-content:center;min-height:100vh;
+  }
+  .foglio{width:100%;max-width:34rem;padding:44px 22px 70px}
+
+  .marchio{
+    font-family:var(--serif);font-weight:700;font-size:38px;letter-spacing:.02em;
+    margin:0 0 6px;line-height:1;
+  }
+  .marchio em{font-style:italic;color:var(--accent)}
+  .occhiello{
+    margin:0 0 34px;color:var(--muted);font-size:16px;
+  }
+
+  /* Il bottone pieno e' uno solo per riga: sono due porte, non una scelta
+     fra un'azione principale e una secondaria. */
+  a.porta{
+    display:block;text-decoration:none;
+    background:var(--surface);color:var(--text);
+    border:1px solid var(--accent-soft);border-radius:20px;
+    padding:18px 22px;margin-bottom:12px;
+    transition:border-color .18s ease, transform .18s ease;
+  }
+  a.porta:hover{border-color:var(--accent);transform:translateY(-1px)}
+  a.porta .t{display:block;font-weight:600;font-size:17px}
+  a.porta .s{display:block;color:var(--muted);font-size:14.5px;margin-top:2px}
+
+  .scheda{
+    background:var(--surface);border:1px solid var(--accent-soft);
+    border-radius:20px;padding:20px 22px;margin-top:26px;
+  }
+  .scheda h2{
+    font-family:var(--serif);font-weight:700;font-size:20px;margin:0 0 6px;
+  }
+  .scheda p{margin:0;color:var(--muted);font-size:15px}
+  .scheda a{color:var(--accent);font-weight:600;text-decoration:none}
+  .scheda a:hover{text-decoration:underline}
+
+  .piede{
+    margin-top:40px;padding-top:18px;border-top:1px solid rgba(31,27,24,.12);
+    font-size:13.5px;color:var(--muted);
+  }
+
+  @media (max-width:520px){
+    .foglio{padding:30px 18px 60px}
+    .marchio{font-size:32px}
+  }
+</style>
+</head>
+<body>
+<div class="foglio">
+
+  <p class="marchio">Fly<em>deck</em></p>
+  <p class="occhiello">I tuoi viaggi in un mazzo di carte.</p>
+
+  <a class="porta" href="privacy.html">
+    <span class="t">Informativa sulla privacy</span>
+    <span class="s">Quali dati raccogliamo, perch&eacute;, e cosa non lascia mai il tuo telefono.</span>
+  </a>
+
+  <a class="porta" href="termini.html">
+    <span class="t">Condizioni d&rsquo;uso</span>
+    <span class="s">Le regole, scritte in italiano e non in legalese.</span>
+  </a>
+
+  <div class="scheda">
+    <h2>Assistenza</h2>
+    <p>Qualcosa non funziona, o hai un&rsquo;idea? Scrivi a
+    <a href="mailto:flydeck.app@gmail.com">flydeck.app@gmail.com</a>
+    e ti rispondiamo noi, non un modulo automatico.</p>
+  </div>
+
+  <p class="piede">Flydeck &egrave; sviluppata da Crescenzo Silvestre, in Italia.</p>
+
+</div>
+</body>
+</html>
