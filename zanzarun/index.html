@@ -1,0 +1,210 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<title>ZanzaRun</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<style>
+/* Layout: un solo schermo, campo di gioco verticale centrato con HUD sovrapposto */
+:root {
+    --bg: #0d1117; --field: #111827; --panel: rgba(15, 23, 42, .92);
+    --fg: #fff; --muted: #94a3b8; --accent: #38bdf8; --ink: #0f172a;
+    --font: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    color-scheme: dark;
+}
+* { box-sizing: border-box; user-select: none; -webkit-user-select: none; }
+html, body { height: 100%; }
+body {
+    margin: 0; background: var(--bg); color: var(--fg); font-family: var(--font);
+    overflow: hidden; display: flex; justify-content: center; align-items: center;
+    padding-left: max(16px, env(safe-area-inset-left, 0px));
+    padding-right: max(16px, env(safe-area-inset-right, 0px));
+}
+#game {
+    position: relative; width: 100%; max-width: 420px; height: 100%; max-height: 750px;
+    background: var(--field); overflow: hidden; touch-action: none;
+    box-shadow: 0 0 20px rgba(0, 0, 0, .8);
+}
+canvas { display: block; width: 100%; height: 100%; }
+.hud {
+    position: absolute; inset: 0 0 auto; display: flex; justify-content: space-between;
+    padding: 20px; font-size: 1.2rem; font-weight: bold; pointer-events: none;
+    text-shadow: 0 2px 4px rgba(0, 0, 0, .6); font-variant-numeric: tabular-nums;
+}
+.panel {
+    position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+    width: 80%; max-width: 300px; padding: 24px; text-align: center;
+    background: var(--panel); border: 1px solid rgba(255, 255, 255, .1); border-radius: 16px;
+}
+h1 { margin: 0 0 10px; font-size: 1.8rem; color: var(--accent); text-wrap: balance; }
+p { margin: 0 0 20px; color: var(--muted); font-size: .95rem; }
+button {
+    width: 100%; padding: 12px 24px; border: 0; border-radius: 8px; cursor: pointer;
+    background: var(--accent); color: var(--ink); font: bold 1.1rem var(--font);
+    box-shadow: 0 4px 12px rgba(56, 189, 248, .3);
+}
+button:active { transform: scale(.96); }
+button:focus-visible { outline: 3px solid var(--fg); outline-offset: 3px; }
+[hidden] { display: none !important; }
+</style>
+</head>
+<body>
+<div id="game">
+    <canvas id="canvas"></canvas>
+    <div class="hud">
+        <div>Punti: <span id="scoreEl">0</span></div>
+        <div>Sangue: <span id="bloodEl">100</span>%</div>
+    </div>
+    <div id="panel" class="panel">
+        <h1 id="title">ZanzaRun</h1>
+        <p id="text">Trascina il dito (o muovi il mouse) per guidare la zanzara ed evita i colpi di giornale.</p>
+        <button id="playBtn">GIOCA</button>
+    </div>
+</div>
+<script>
+const $ = id => document.getElementById(id);
+const game = $('game'), canvas = $('canvas'), ctx = canvas.getContext('2d');
+const R = 20; // raggio di collisione della zanzara
+let W, H, playing = false, score, blood, obstacles = [], particles = [];
+let spawnIn, scroll = 0, wing = 0, last = 0, best = 0;
+const m = { x: 0, y: 0, tx: 0, ty: 0 };
+try { best = +localStorage.getItem('zanzarunBest') || 0; } catch {}
+
+const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
+
+// Canvas nitido anche su schermi ad alta densità
+function resize() {
+    const dpr = window.devicePixelRatio || 1;
+    W = game.clientWidth; H = game.clientHeight;
+    canvas.width = W * dpr; canvas.height = H * dpr;
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    if (!playing) m.x = m.tx = W / 2, m.y = m.ty = H - 150;
+}
+addEventListener('resize', resize);
+resize();
+
+// Un solo gestore per mouse e touch
+function aim(e) {
+    if (!playing) return;
+    const r = canvas.getBoundingClientRect();
+    m.tx = e.clientX - r.left; m.ty = e.clientY - r.top;
+}
+game.addEventListener('pointerdown', aim);
+game.addEventListener('pointermove', aim);
+
+$('playBtn').onclick = () => {
+    score = 0; blood = 100; obstacles = []; particles = []; spawnIn = 0.5;
+    m.x = m.tx = W / 2; m.y = m.ty = H - 150;
+    $('panel').hidden = true;
+    playing = true;
+};
+
+function gameOver() {
+    playing = false;
+    const pts = Math.floor(score);
+    if (pts > best) { best = pts; try { localStorage.setItem('zanzarunBest', best); } catch {} }
+    $('title').textContent = 'SEI STATO SCHIACCIATO!';
+    $('text').textContent = `Punteggio: ${pts} · Record: ${best}`;
+    $('playBtn').textContent = 'RIGIOCA';
+    $('panel').hidden = false;
+}
+
+// dt in secondi: la velocità è la stessa a 60 Hz come a 120 Hz
+function update(dt) {
+    const k = dt * 60;
+    wing += 0.8 * k;
+    for (let i = particles.length - 1; i >= 0; i--) {
+        const p = particles[i];
+        p.x += p.vx * k; p.y += p.vy * k;
+        if ((p.life -= k) <= 0) particles.splice(i, 1);
+    }
+    if (!playing) return;
+
+    scroll = (scroll + k) % 40;
+    score += 6 * dt;
+    const level = Math.min(score / 300, 1); // la difficoltà cresce fino a 300 punti
+
+    const ease = 1 - Math.pow(0.85, k);
+    m.x = clamp(m.x + (m.tx - m.x) * ease, R, W - R);
+    m.y = clamp(m.y + (m.ty - m.y) * ease, R, H - R);
+
+    if ((spawnIn -= dt) <= 0) {
+        spawnIn = 1 - 0.6 * level;
+        obstacles.push({
+            x: 40 + Math.random() * (W - 80), y: -100, w: 70, h: 90,
+            speed: 4 + Math.random() * 3 + 3 * level, rot: (Math.random() - 0.5) * 0.5
+        });
+    }
+
+    for (let i = obstacles.length - 1; i >= 0; i--) {
+        const o = obstacles[i];
+        o.y += o.speed * k;
+        if (Math.abs(m.x - o.x) < o.w / 2 + R && Math.abs(m.y - o.y) < o.h / 2 + R) {
+            obstacles.splice(i, 1);
+            blood = Math.max(0, blood - 35);
+            for (let n = 0; n < 8; n++)
+                particles.push({ x: m.x, y: m.y, vx: (Math.random() - 0.5) * 6, vy: (Math.random() - 0.5) * 6, life: 20 });
+            if (!blood) { gameOver(); break; }
+        } else if (o.y > H + 100) obstacles.splice(i, 1);
+    }
+    $('scoreEl').textContent = Math.floor(score);
+    $('bloodEl').textContent = blood;
+}
+
+function ellipse(x, y, rx, ry, rot = 0) {
+    ctx.beginPath(); ctx.ellipse(x, y, rx, ry, rot, 0, Math.PI * 2); ctx.fill();
+}
+
+function draw() {
+    ctx.clearRect(0, 0, W, H);
+
+    // Righe che scorrono: danno il senso del volo
+    ctx.strokeStyle = 'rgba(255,255,255,.04)'; ctx.lineWidth = 1;
+    ctx.beginPath();
+    for (let y = scroll; y < H; y += 40) { ctx.moveTo(0, y); ctx.lineTo(W, y); }
+    ctx.stroke();
+
+    // Giornali
+    for (const o of obstacles) {
+        ctx.save(); ctx.translate(o.x, o.y); ctx.rotate(o.rot);
+        const l = -o.w / 2, t = -o.h / 2;
+        ctx.fillStyle = '#cbd5e1'; ctx.fillRect(l, t, o.w, o.h);
+        ctx.fillStyle = '#64748b';
+        ctx.fillRect(l + 8, t + 10, o.w - 16, 8);
+        ctx.fillRect(l + 8, t + 24, o.w - 25, 4);
+        ctx.fillRect(l + 8, t + 32, o.w - 16, 4);
+        ctx.restore();
+    }
+
+    ctx.fillStyle = '#ef4444';
+    for (const p of particles) ctx.fillRect(p.x - 2, p.y - 2, 4, 4);
+
+    // Zanzara vista da dietro
+    ctx.save(); ctx.translate(m.x, m.y);
+    const spread = Math.sin(wing) * 9;
+    ctx.fillStyle = 'rgba(255,255,255,.4)';
+    ellipse(-12 - spread, 2, 14, 6, -0.3);
+    ellipse(12 + spread, 2, 14, 6, 0.3);
+    ctx.fillStyle = '#7f1d1d'; ellipse(0, 10, 6, 14);                 // addome
+    ctx.strokeStyle = '#ef4444'; ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    for (const [y, w] of [[6, 5], [10, 6], [14, 5]]) { ctx.moveTo(-w, y); ctx.lineTo(w, y); }
+    ctx.stroke();
+    ctx.fillStyle = '#334155'; ellipse(0, 0, 8, 8);                   // torace
+    ctx.fillStyle = '#1e293b'; ellipse(0, -10, 5, 5);                 // testa
+    ctx.strokeStyle = '#94a3b8'; ctx.lineWidth = 2;                   // proboscide
+    ctx.beginPath(); ctx.moveTo(0, -12); ctx.lineTo(0, -26); ctx.stroke();
+    ctx.restore();
+}
+
+function loop(now) {
+    update(Math.min((now - last) / 1000, 0.05)); // limite: niente salti dopo una pausa
+    last = now;
+    draw();
+    requestAnimationFrame(loop);
+}
+requestAnimationFrame(loop);
+</script>
+</body>
+</html>
